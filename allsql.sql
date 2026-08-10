@@ -63,7 +63,7 @@ CREATE TABLE campaigns (
     CHECK (end_date >= start_date),
     CHECK (raised_amount <= goal_amount)
 ); 
-//account
+
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -295,12 +295,231 @@ CREATE TABLE campaign_donation_totals (
 
 
 
-//investing
 
 
 
 
 
+CREATE TABLE funds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    name VARCHAR(150) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    description TEXT,
+    fund_type VARCHAR(30) NOT NULL DEFAULT 'general'
+        CHECK (
+            fund_type IN (
+                'general',
+                'restricted',
+                'campaign',
+                'emergency',
+                'zakat',
+                'other'
+            )
+        ),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, code)
+);
+
+
+
+
+CREATE TABLE chart_of_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    parent_id UUID
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+    account_code VARCHAR(30) NOT NULL,
+
+    account_name VARCHAR(150) NOT NULL,
+
+    account_type VARCHAR(30) NOT NULL
+        CHECK (
+            account_type IN (
+                'asset',
+                'liability',
+                'equity',
+                'income',
+                'expense'
+            )
+        ),
+
+    normal_balance VARCHAR(10) NOT NULL
+        CHECK (
+            normal_balance IN (
+                'debit',
+                'credit'
+            )
+        ),
+
+    description TEXT,
+
+    is_system_account BOOLEAN NOT NULL DEFAULT FALSE,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, account_code)
+);
+
+
+
+
+
+CREATE TABLE accounting_periods (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    name VARCHAR(50) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'open'
+        CHECK (
+            status IN (
+                'open',
+                'closed'
+            )
+        ),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    closed_at TIMESTAMPTZ,
+
+    CHECK (end_date >= start_date),
+
+    UNIQUE (organization_id, start_date, end_date)
+);
+
+
+
+CREATE TABLE journal_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    accounting_period_id UUID
+        REFERENCES accounting_periods(id)
+        ON DELETE RESTRICT,
+    reference_number VARCHAR(100) NOT NULL,
+    transaction_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    transaction_type VARCHAR(40) NOT NULL
+        CHECK (
+            transaction_type IN (
+                'donation',
+                'payment',
+                'refund',
+                'payment_fee',
+                'campaign_expense',
+                'general_expense',
+                'adjustment',
+                'transfer'
+            )
+        ),
+    description TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'draft',
+                'posted',
+                'voided'
+            )
+        ),
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, reference_number)
+);
+
+
+
+
+CREATE TABLE journal_entry_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    journal_entry_id UUID NOT NULL
+        REFERENCES journal_entries(id)
+        ON DELETE CASCADE,
+    account_id UUID NOT NULL
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+    fund_id UUID
+        REFERENCES funds(id)
+        ON DELETE RESTRICT,
+    description TEXT,
+    debit NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (debit >= 0),
+    credit NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (credit >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (
+        NOT (debit > 0 AND credit > 0)
+    ),
+    CHECK (
+        debit > 0 OR credit > 0
+    )
+);
+
+
+
+
+
+CREATE TABLE financial_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    account_id UUID NOT NULL
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+    account_name VARCHAR(150) NOT NULL,
+    account_type VARCHAR(30) NOT NULL
+        CHECK (
+            account_type IN (
+                'cash',
+                'bank',
+                'mobile_wallet',
+                'other'
+            )
+        ),
+    bank_name VARCHAR(150),
+
+    account_number VARCHAR(255),
+
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+
+    opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+
+
+
+
+
+
+
+
+// investment
 
 CREATE TABLE investor_types (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -947,5 +1166,357 @@ CREATE TABLE share_ownership_ledger (
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE investment_expense_categories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    name VARCHAR(150) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, code)
+);
+
+
+
+
+
+
+
+CREATE TABLE investment_expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    investment_product_id UUID NOT NULL
+        REFERENCES investment_products(id)
+        ON DELETE RESTRICT,
+    investment_id UUID
+        REFERENCES investments(id)
+        ON DELETE RESTRICT,
+    expense_category_id UUID NOT NULL
+        REFERENCES investment_expense_categories(id)
+        ON DELETE RESTRICT,
+    financial_account_id UUID
+        REFERENCES financial_accounts(id)
+        ON DELETE RESTRICT,
+    expense_number VARCHAR(50) NOT NULL,
+    expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    amount NUMERIC(14,2) NOT NULL
+        CHECK (amount > 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+    payment_method VARCHAR(30)
+        CHECK (
+            payment_method IN (
+                'cash',
+                'bank',
+                'mobile_wallet',
+                'card',
+                'other'
+            )
+        ),
+    description TEXT,
+    reference_number VARCHAR(100),
+    journal_entry_id UUID,
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'draft',
+                'posted',
+                'cancelled'
+            )
+        ),
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, expense_number)
+);
+
+
+
+
+
+
+
+CREATE TABLE investment_income_categories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    name VARCHAR(150) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, code)
+);
+
+
+
+
+
+CREATE TABLE investment_income (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    investment_product_id UUID NOT NULL
+        REFERENCES investment_products(id)
+        ON DELETE RESTRICT,
+    investment_id UUID
+        REFERENCES investments(id)
+        ON DELETE RESTRICT,
+    income_category_id UUID NOT NULL
+        REFERENCES investment_income_categories(id)
+        ON DELETE RESTRICT,
+    financial_account_id UUID
+        REFERENCES financial_accounts(id)
+        ON DELETE RESTRICT,
+    income_number VARCHAR(50) NOT NULL,
+    income_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    amount NUMERIC(14,2) NOT NULL
+        CHECK (amount > 0),
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+    payment_method VARCHAR(30)
+        CHECK (
+            payment_method IN (
+                'cash',
+                'bank',
+                'mobile_wallet',
+                'card',
+                'other'
+            )
+        ),
+    description TEXT,
+    reference_number VARCHAR(100),
+    journal_entry_id UUID,
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'draft',
+                'posted',
+                'cancelled'
+            )
+        ),
+
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (organization_id, income_number)
+);
+
+
+
+
+
+
+CREATE TABLE investment_chart_of_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+
+    parent_id UUID
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+
+    account_code VARCHAR(30) NOT NULL,
+
+    account_name VARCHAR(150) NOT NULL,
+
+    account_type VARCHAR(30) NOT NULL
+        CHECK (
+            account_type IN (
+                'asset',
+                'liability',
+                'equity',
+                'income',
+                'expense'
+            )
+        ),
+
+    normal_balance VARCHAR(10) NOT NULL
+        CHECK (
+            normal_balance IN (
+                'debit',
+                'credit'
+            )
+        ),
+
+    is_system_account BOOLEAN NOT NULL DEFAULT FALSE,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    description TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, account_code)
+);
+
+
+
+
+
+
+
+CREATE TABLE investment_financial_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+    account_id UUID NOT NULL
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+    account_name VARCHAR(150) NOT NULL,
+    account_type VARCHAR(30) NOT NULL
+        CHECK (
+            account_type IN (
+                'cash',
+                'bank',
+                'mobile_wallet',
+                'other'
+            )
+        ),
+    bank_name VARCHAR(150),
+    account_number VARCHAR(255),
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+    opening_balance NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (opening_balance >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+CREATE TABLE investment_journal_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+
+    reference_number VARCHAR(100) NOT NULL,
+
+    transaction_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    transaction_type VARCHAR(40) NOT NULL
+        CHECK (
+            transaction_type IN (
+                'investment',
+                'investment_income',
+                'investment_expense',
+                'investment_payment',
+                'investment_return',
+                'withdrawal',
+                'refund',
+                'fee',
+                'transfer',
+                'adjustment'
+            )
+        ),
+
+    description TEXT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'draft',
+                'posted',
+                'voided'
+            )
+        ),
+
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, reference_number)
+);
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE investment_journal_entry_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    journal_entry_id UUID NOT NULL
+        REFERENCES journal_entries(id)
+        ON DELETE CASCADE,
+
+    account_id UUID NOT NULL
+        REFERENCES chart_of_accounts(id)
+        ON DELETE RESTRICT,
+
+    investment_product_id UUID
+        REFERENCES investment_products(id)
+        ON DELETE RESTRICT,
+
+    investment_id UUID
+        REFERENCES investments(id)
+        ON DELETE RESTRICT,
+
+    financial_account_id UUID
+        REFERENCES financial_accounts(id)
+        ON DELETE RESTRICT,
+
+    description TEXT,
+
+    debit NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (debit >= 0),
+
+    credit NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (credit >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        NOT (debit > 0 AND credit > 0)
+    ),
+
+    CHECK (
+        debit > 0 OR credit > 0
+    )
+);
+
 
 
