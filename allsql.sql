@@ -783,9 +783,6 @@ CREATE TABLE investment_product_units (
 
 CREATE TABLE investments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    investor_id UUID NOT NULL
-        REFERENCES investor_profiles(id)
-        ON DELETE RESTRICT,
     investment_product_id UUID NOT NULL
         REFERENCES investment_products(id)
         ON DELETE RESTRICT,
