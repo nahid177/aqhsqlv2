@@ -1500,6 +1500,10 @@ CREATE TABLE investment_journal_entry_lines (
 
 
 
+
+
+
+
 //Savings Queryy
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
