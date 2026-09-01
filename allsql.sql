@@ -1167,19 +1167,6 @@ CREATE TABLE share_ownership_ledger (
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 CREATE TABLE investment_expense_categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL
@@ -1467,12 +1454,6 @@ CREATE TABLE investment_journal_entries (
 
 
 
-
-
-
-
-
-
 CREATE TABLE investment_journal_entry_lines (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -1516,4 +1497,1063 @@ CREATE TABLE investment_journal_entry_lines (
 );
 
 
+
+
+
+
+
+
+
+//Savings Queryy
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+//Organization
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name VARCHAR(200) NOT NULL,
+
+    code VARCHAR(50) NOT NULL UNIQUE,
+
+    description TEXT,
+
+    phone VARCHAR(30),
+
+    email VARCHAR(150),
+
+    address TEXT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (
+            status IN ('active', 'inactive')
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+//branches
+CREATE TABLE branches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+
+    branch_code VARCHAR(50) NOT NULL,
+
+    name VARCHAR(150) NOT NULL,
+
+    phone VARCHAR(30),
+
+    email VARCHAR(150),
+
+    address TEXT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (
+            status IN ('active', 'inactive')
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, branch_code)
+);
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    branch_id UUID
+        REFERENCES branches(id)
+        ON DELETE SET NULL,
+
+    name VARCHAR(150) NOT NULL,
+
+    email VARCHAR(150) UNIQUE,
+
+    phone VARCHAR(30) UNIQUE,
+
+    username VARCHAR(100) NOT NULL UNIQUE,
+
+    password_hash TEXT NOT NULL,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (
+            status IN (
+                'active',
+                'inactive',
+                'locked'
+            )
+        ),
+
+    last_login_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name VARCHAR(50) NOT NULL UNIQUE,
+
+    description TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_roles (
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    role_id UUID NOT NULL
+        REFERENCES roles(id)
+        ON DELETE CASCADE,
+
+    PRIMARY KEY (user_id, role_id)
+);
+
+CREATE TABLE customers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    customer_number VARCHAR(50) NOT NULL UNIQUE,
+
+    first_name VARCHAR(100) NOT NULL,
+
+    middle_name VARCHAR(100),
+
+    last_name VARCHAR(100),
+
+    date_of_birth DATE,
+
+    gender VARCHAR(20)
+        CHECK (
+            gender IN (
+                'male',
+                'female',
+                'other'
+            )
+        ),
+
+    phone VARCHAR(30) NOT NULL,
+
+    email VARCHAR(150),
+
+    nid_number VARCHAR(100),
+
+    occupation VARCHAR(150),
+
+    nationality VARCHAR(100) NOT NULL DEFAULT 'Bangladeshi',
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'active',
+                'inactive',
+                'blocked',
+                'deceased'
+            )
+        ),
+
+    kyc_status VARCHAR(30) NOT NULL DEFAULT 'pending'
+        CHECK (
+            kyc_status IN (
+                'pending',
+                'under_review',
+                'verified',
+                'rejected',
+                'expired'
+            )
+        ),
+
+    kyc_verified_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE customer_addresses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE CASCADE,
+
+    address_type VARCHAR(20) NOT NULL
+        CHECK (
+            address_type IN (
+                'present',
+                'permanent',
+                'office',
+                'other'
+            )
+        ),
+
+    address_line_1 VARCHAR(255) NOT NULL,
+
+    address_line_2 VARCHAR(255),
+
+    village VARCHAR(150),
+
+    post_office VARCHAR(150),
+
+    upazila VARCHAR(150),
+
+    district VARCHAR(150),
+
+    division VARCHAR(150),
+
+    postal_code VARCHAR(20),
+
+    country VARCHAR(100) NOT NULL DEFAULT 'Bangladesh',
+
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE customer_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE CASCADE,
+
+    document_type VARCHAR(50) NOT NULL
+        CHECK (
+            document_type IN (
+                'nid',
+                'passport',
+                'birth_certificate',
+                'driving_license',
+                'other'
+            )
+        ),
+
+    document_number VARCHAR(100),
+
+    document_url TEXT,
+
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+
+    verified_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    verified_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE savings_products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    organization_id UUID NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE RESTRICT,
+
+    product_code VARCHAR(50) NOT NULL,
+
+    product_name VARCHAR(150) NOT NULL,
+
+    description TEXT,
+
+    product_type VARCHAR(30) NOT NULL
+        CHECK (
+            product_type IN (
+                'savings',
+                'dps',
+                'term_deposit'
+            )
+        ),
+
+    contract_type VARCHAR(30) NOT NULL
+        CHECK (
+            contract_type IN (
+                'mudaraba',
+                'wadiah'
+            )
+        ),
+
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+
+    minimum_opening_amount NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (minimum_opening_amount >= 0),
+
+    minimum_balance NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (minimum_balance >= 0),
+
+    withdrawal_allowed BOOLEAN NOT NULL DEFAULT TRUE,
+
+    profit_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+
+    duration_months INTEGER
+        CHECK (
+            duration_months IS NULL
+            OR duration_months > 0
+        ),
+
+    installment_amount NUMERIC(18,2)
+        CHECK (
+            installment_amount IS NULL
+            OR installment_amount > 0
+        ),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'draft'
+        CHECK (
+            status IN (
+                'draft',
+                'active',
+                'inactive',
+                'closed'
+            )
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (organization_id, product_code)
+);
+
+CREATE TABLE savings_product_profit_rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    savings_product_id UUID NOT NULL
+        REFERENCES savings_products(id)
+        ON DELETE RESTRICT,
+
+    effective_from DATE NOT NULL,
+
+    effective_to DATE,
+
+    depositor_profit_share NUMERIC(7,4) NOT NULL
+        CHECK (
+            depositor_profit_share >= 0
+            AND depositor_profit_share <= 100
+        ),
+
+    bank_profit_share NUMERIC(7,4) NOT NULL
+        CHECK (
+            bank_profit_share >= 0
+            AND bank_profit_share <= 100
+        ),
+
+    description TEXT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (
+            status IN (
+                'draft',
+                'active',
+                'expired',
+                'cancelled'
+            )
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        effective_to IS NULL
+        OR effective_to >= effective_from
+    ),
+
+    CHECK (
+        depositor_profit_share + bank_profit_share = 100
+    )
+);
+
+CREATE TABLE savings_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_number VARCHAR(50) NOT NULL UNIQUE,
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE RESTRICT,
+
+    savings_product_id UUID NOT NULL
+        REFERENCES savings_products(id)
+        ON DELETE RESTRICT,
+
+    branch_id UUID NOT NULL
+        REFERENCES branches(id)
+        ON DELETE RESTRICT,
+
+    account_name VARCHAR(255) NOT NULL,
+
+    currency VARCHAR(3) NOT NULL DEFAULT 'BDT',
+
+    opening_date DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    maturity_date DATE,
+
+    ledger_balance NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (ledger_balance >= 0),
+
+    available_balance NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (available_balance >= 0),
+
+    blocked_amount NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (blocked_amount >= 0),
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'active',
+                'dormant',
+                'blocked',
+                'closed'
+            )
+        ),
+
+    closed_at TIMESTAMPTZ,
+
+    closing_reason TEXT,
+
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        available_balance <= ledger_balance
+    ),
+
+    CHECK (
+        maturity_date IS NULL
+        OR maturity_date >= opening_date
+    )
+);
+
+CREATE TABLE savings_account_holders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE RESTRICT,
+
+    holder_type VARCHAR(20) NOT NULL DEFAULT 'primary'
+        CHECK (
+            holder_type IN (
+                'primary',
+                'joint'
+            )
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (
+        savings_account_id,
+        customer_id
+    )
+);
+
+CREATE TABLE savings_account_nominees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    name VARCHAR(255) NOT NULL,
+
+    relationship VARCHAR(100),
+
+    date_of_birth DATE,
+
+    nid_number VARCHAR(100),
+
+    phone VARCHAR(30),
+
+    address TEXT,
+
+    percentage NUMERIC(7,4) NOT NULL
+        CHECK (
+            percentage > 0
+            AND percentage <= 100
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE savings_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    transaction_number VARCHAR(60) NOT NULL UNIQUE,
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    transaction_type VARCHAR(30) NOT NULL
+        CHECK (
+            transaction_type IN (
+                'deposit',
+                'withdrawal',
+                'transfer_in',
+                'transfer_out',
+                'profit',
+                'fee',
+                'adjustment',
+                'reversal'
+            )
+        ),
+
+    channel VARCHAR(30) NOT NULL
+        CHECK (
+            channel IN (
+                'branch',
+                'atm',
+                'mobile_app',
+                'internet_banking',
+                'agent',
+                'system',
+                'api'
+            )
+        ),
+
+    amount NUMERIC(18,2) NOT NULL
+        CHECK (amount > 0),
+
+    balance_before NUMERIC(18,2) NOT NULL,
+
+    balance_after NUMERIC(18,2) NOT NULL,
+
+    reference_number VARCHAR(100),
+
+    description TEXT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'processing',
+                'completed',
+                'failed',
+                'reversed',
+                'cancelled'
+            )
+        ),
+
+    transaction_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE savings_deposits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    transaction_id UUID NOT NULL UNIQUE
+        REFERENCES savings_transactions(id)
+        ON DELETE RESTRICT,
+
+    payment_method VARCHAR(30) NOT NULL
+        CHECK (
+            payment_method IN (
+                'cash',
+                'bank_transfer',
+                'cheque',
+                'mobile_banking',
+                'card'
+            )
+        ),
+
+    cheque_number VARCHAR(100),
+
+    bank_name VARCHAR(150),
+
+    external_transaction_number VARCHAR(150),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE savings_withdrawals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    transaction_id UUID NOT NULL UNIQUE
+        REFERENCES savings_transactions(id)
+        ON DELETE RESTRICT,
+
+    withdrawal_method VARCHAR(30) NOT NULL
+        CHECK (
+            withdrawal_method IN (
+                'cash',
+                'bank_transfer',
+                'mobile_banking'
+            )
+        ),
+
+    requested_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    approved_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    approved_at TIMESTAMPTZ,
+
+    remarks TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE savings_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    reference_number VARCHAR(100) NOT NULL UNIQUE,
+
+    from_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    to_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    amount NUMERIC(18,2) NOT NULL
+        CHECK (amount > 0),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'processing',
+                'completed',
+                'failed',
+                'reversed',
+                'cancelled'
+            )
+        ),
+
+    initiated_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    completed_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        from_account_id <> to_account_id
+    )
+);
+
+CREATE TABLE account_holds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    amount NUMERIC(18,2) NOT NULL
+        CHECK (amount > 0),
+
+    reason TEXT,
+
+    reference_number VARCHAR(100),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (
+            status IN (
+                'active',
+                'released',
+                'expired',
+                'cancelled'
+            )
+        ),
+
+    held_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    released_at TIMESTAMPTZ
+);
+
+CREATE TABLE profit_pools (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    pool_number VARCHAR(60) NOT NULL UNIQUE,
+
+    name VARCHAR(150) NOT NULL,
+
+    description TEXT,
+
+    period_start DATE NOT NULL,
+
+    period_end DATE NOT NULL,
+
+    total_funds NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (total_funds >= 0),
+
+    gross_profit NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (gross_profit >= 0),
+
+    expenses NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (expenses >= 0),
+
+    distributable_profit NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (distributable_profit >= 0),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'open'
+        CHECK (
+            status IN (
+                'open',
+                'calculating',
+                'calculated',
+                'distributed',
+                'closed'
+            )
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        period_end >= period_start
+    )
+);
+
+CREATE TABLE profit_pool_contributions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    profit_pool_id UUID NOT NULL
+        REFERENCES profit_pools(id)
+        ON DELETE RESTRICT,
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    eligible_balance NUMERIC(18,2) NOT NULL
+        CHECK (eligible_balance >= 0),
+
+    weight NUMERIC(18,8) NOT NULL
+        CHECK (weight >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (
+        profit_pool_id,
+        savings_account_id
+    )
+);
+
+CREATE TABLE profit_calculations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    profit_pool_id UUID NOT NULL
+        REFERENCES profit_pools(id)
+        ON DELETE RESTRICT,
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    eligible_balance NUMERIC(18,2) NOT NULL
+        CHECK (eligible_balance >= 0),
+
+    weight NUMERIC(18,8) NOT NULL
+        CHECK (weight >= 0),
+
+    profit_share_ratio NUMERIC(7,4) NOT NULL
+        CHECK (
+            profit_share_ratio >= 0
+            AND profit_share_ratio <= 100
+        ),
+
+    calculated_profit NUMERIC(18,2) NOT NULL
+        CHECK (calculated_profit >= 0),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'calculated'
+        CHECK (
+            status IN (
+                'calculated',
+                'approved',
+                'posted',
+                'cancelled'
+            )
+        ),
+
+    calculated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    approved_at TIMESTAMPTZ,
+
+    approved_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE TABLE profit_distributions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    profit_calculation_id UUID NOT NULL UNIQUE
+        REFERENCES profit_calculations(id)
+        ON DELETE RESTRICT,
+
+    savings_transaction_id UUID
+        REFERENCES savings_transactions(id)
+        ON DELETE RESTRICT,
+
+    amount NUMERIC(18,2) NOT NULL
+        CHECK (amount > 0),
+
+    distribution_date DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'posted',
+                'cancelled'
+            )
+        ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE fee_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name VARCHAR(100) NOT NULL,
+
+    code VARCHAR(50) NOT NULL UNIQUE,
+
+    description TEXT,
+
+    calculation_type VARCHAR(20) NOT NULL
+        CHECK (
+            calculation_type IN (
+                'fixed',
+                'percentage'
+            )
+        ),
+
+    amount NUMERIC(18,2)
+        CHECK (
+            amount IS NULL
+            OR amount >= 0
+        ),
+
+    percentage NUMERIC(7,4)
+        CHECK (
+            percentage IS NULL
+            OR (
+                percentage >= 0
+                AND percentage <= 100
+            )
+        ),
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE account_fees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    savings_account_id UUID NOT NULL
+        REFERENCES savings_accounts(id)
+        ON DELETE RESTRICT,
+
+    fee_type_id UUID NOT NULL
+        REFERENCES fee_types(id)
+        ON DELETE RESTRICT,
+
+    transaction_id UUID
+        REFERENCES savings_transactions(id)
+        ON DELETE RESTRICT,
+
+    amount NUMERIC(18,2) NOT NULL
+        CHECK (amount > 0),
+
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'pending',
+                'posted',
+                'cancelled'
+            )
+        ),
+
+    charged_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE accounting_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_code VARCHAR(50) NOT NULL UNIQUE,
+
+    account_name VARCHAR(150) NOT NULL,
+
+    account_type VARCHAR(20) NOT NULL
+        CHECK (
+            account_type IN (
+                'asset',
+                'liability',
+                'equity',
+                'income',
+                'expense'
+            )
+        ),
+
+    parent_id UUID
+        REFERENCES accounting_accounts(id)
+        ON DELETE RESTRICT,
+
+    is_system_account BOOLEAN NOT NULL DEFAULT FALSE,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE journal_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    reference_number VARCHAR(100) NOT NULL UNIQUE,
+
+    transaction_date TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    description TEXT,
+
+    source_type VARCHAR(50),
+
+    source_id UUID,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'posted'
+        CHECK (
+            status IN (
+                'draft',
+                'posted',
+                'voided'
+            )
+        ),
+
+    created_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE journal_entry_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    journal_entry_id UUID NOT NULL
+        REFERENCES journal_entries(id)
+        ON DELETE CASCADE,
+
+    accounting_account_id UUID NOT NULL
+        REFERENCES accounting_accounts(id)
+        ON DELETE RESTRICT,
+
+    description TEXT,
+
+    debit NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (debit >= 0),
+
+    credit NUMERIC(18,2) NOT NULL DEFAULT 0
+        CHECK (credit >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        NOT (
+            debit > 0
+            AND credit > 0
+        )
+    ),
+
+    CHECK (
+        debit > 0
+        OR credit > 0
+    )
+);
+
+CREATE TABLE transaction_approvals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    transaction_id UUID NOT NULL
+        REFERENCES savings_transactions(id)
+        ON DELETE RESTRICT,
+
+    requested_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    approved_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'approved',
+                'rejected',
+                'cancelled'
+            )
+        ),
+
+    remarks TEXT,
+
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    approved_at TIMESTAMPTZ
+);
+
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    action VARCHAR(100) NOT NULL,
+
+    table_name VARCHAR(100),
+
+    record_id UUID,
+
+    old_data JSONB,
+
+    new_data JSONB,
+
+    ip_address INET,
+
+    user_agent TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
